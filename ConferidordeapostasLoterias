@@ -1,0 +1,110 @@
+import streamlit as st
+import requests
+import urllib3
+import re
+
+# Desativa avisos de SSL (comum em sites do governo)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# --- CONFIGURAÇÃO DA PÁGINA ---
+st.set_page_config(page_title="Conferidor de Loterias", page_icon="💰", layout="centered")
+
+# --- LÓGICA DE PREMIAÇÃO ---
+# Dicionário mapeando a quantidade de acertos para o nome do prêmio
+REGRAS_PREMIOS = {
+    "megasena": {4: "Quadra", 5: "Quina", 6: "Sena"},
+    "lotofacil": {11: "11 Acertos", 12: "12 Acertos", 13: "13 Acertos", 14: "14 Acertos", 15: "15 Acertos"},
+    "quina": {2: "Duque", 3: "Terno", 4: "Quadra", 5: "Quina"},
+    "lotomania": {0: "Zero Acertos", 15: "15 Acertos", 16: "16 Acertos", 17: "17 Acertos", 18: "18 Acertos", 19: "19 Acertos", 20: "20 Acertos"}
+}
+
+# --- FUNÇÃO DE BUSCA (SCRAPING) ---
+def buscar_resultado(loteria, concurso):
+    # API interna utilizada pelo portal de loterias da Caixa
+    url = f"https://servicebus2.caixa.gov.br/portalloterias/api/{loteria}/{concurso}"
+    try:
+        response = requests.get(url, verify=False, timeout=15)
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except Exception as e:
+        return None
+
+# --- INTERFACE DO USUÁRIO ---
+st.title("🎰 Conferidor de Loterias Oficial")
+st.markdown("---")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    tipo_loteria = st.selectbox(
+        "Selecione a Loteria", 
+        list(REGRAS_PREMIOS.keys()), 
+        format_func=lambda x: x.capitalize()
+    )
+
+with col2:
+    num_concurso = st.number_input("Número do Concurso", min_value=1, value=2600, step=1)
+
+input_usuario = st.text_area(
+    "Digite seus números apostados", 
+    placeholder="Ex: 05, 12, 23, 34, 45, 56 (pode usar espaço ou vírgula)"
+)
+
+if st.button("🚀 Conferir Bilhete", use_container_width=True):
+    if not input_usuario:
+        st.warning("Por favor, insira os números que você jogou.")
+    else:
+        with st.spinner('Consultando base de dados da Caixa...'):
+            dados = buscar_resultado(tipo_loteria, num_concurso)
+            
+            if dados:
+                # 1. Processar números do sorteio
+                dezenas_sorteadas = [int(n) for n in dados['listaDezenas']]
+                
+                # 2. Processar números do usuário (limpeza com Regex)
+                meus_numeros = [int(n) for n in re.findall(r'\d+', input_usuario)]
+                
+                # 3. Cruzamento de dados
+                acertos = set(meus_numeros).intersection(set(dezenas_sorteadas))
+                qtd_acertos = len(acertos)
+                
+                # --- RESULTADO VISUAL ---
+                st.success(f"### Concurso {dados['numero']} ({dados['dataApuracao']})")
+                
+                # Exibição das dezenas sorteadas bonitinhas
+                st.write("**Dezenas Sorteadas:**")
+                st.code("  ".join(map(str, sorted(dezenas_sorteadas))))
+                
+                st.divider()
+                
+                # Métricas
+                m1, m2 = st.columns(2)
+                m1.metric("Seus Acertos", f"{qtd_acertos}")
+                
+                # Lógica de prêmio específico
+                nome_premio = REGRAS_PREMIOS[tipo_loteria].get(qtd_acertos)
+                
+                if nome_premio:
+                    st.balloons()
+                    m2.metric("Premiação", nome_premio)
+                    st.info(f"🎉 **Parabéns!** Você ganhou na categoria: **{nome_premio}**!")
+                    
+                    # Tentar buscar o valor do prêmio no JSON
+                    for rateio in dados.get('listaRateioPremio', []):
+                        # Verifica se o número de acertos bate com a descrição da faixa
+                        if str(qtd_acertos) in rateio['descricaoFaixa']:
+                            valor = rateio['valorPremio']
+                            st.write(f"💰 **Valor do prêmio para este concurso:** R$ {valor}")
+                else:
+                    m2.metric("Premiação", "Nenhuma")
+                    st.warning("Não foi dessa vez. Você não atingiu a pontuação mínima para prêmio.")
+                
+                if acertos:
+                    st.write(f"✅ **Números que você acertou:** {sorted(list(acertos))}")
+                
+            else:
+                st.error("❌ Concurso não encontrado ou erro na conexão com a Caixa. Verifique o número.")
+
+st.markdown("---")
+st.caption("Nota: Este app utiliza dados públicos. Sempre confira seu bilhete físico em uma casa lotérica.")
