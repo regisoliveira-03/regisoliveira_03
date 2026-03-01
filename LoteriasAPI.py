@@ -1,83 +1,108 @@
 import streamlit as st
 import requests
 
-# Configuração visual do Painel
-st.set_page_config(page_title="Loterias API GitHub", page_icon="💰", layout="wide")
+# 1. Configuração da Página
+st.set_page_config(page_title="Loterias + Conferidor", page_icon="🍀", layout="wide")
 
-def consultar_api_comunitaria(modalidade):
-    """
-    Consome a API de resultados hospedada em serviços comunitários.
-    Esta abordagem é mais leve e evita bloqueios de firewall.
-    """
-    # Endpoint de uma das APIs mais utilizadas no ecossistema GitHub
-    url = f"https://loteriascaixa-api.herokuapp.com/api/{modalidade}/latest"
-    
+def consultar_api(modalidade):
+    """Consulta a API comunitária estável (Projeto GitHub)"""
+    url = f"https://loterica.com.br/api/v1/{modalidade}/ultimo"
     try:
-        # Timeout curto para não travar a interface se a API demorar
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             return response.json()
         return None
     except:
-        # Fallback para outro endpoint caso o primeiro falhe
-        try:
-            url_reserva = f"https://loterica.com.br/api/v1/{modalidade}/ultimo"
-            return requests.get(url_reserva, timeout=10).json()
-        except:
-            return None
+        return None
 
-# --- Interface do Usuário ---
-st.title("💰 Painel de Resultados - API Comunitária")
-st.markdown("Resultados obtidos via integração com projetos open-source do GitHub.")
+# --- Interface Principal ---
+st.title("🍀 Loterias Caixa & Conferidor de Jogos")
+st.markdown("Consulte os resultados e verifique seus acertos automaticamente.")
 
-# Mapeamento para garantir que o slug da URL esteja correto
+# Mapeamento de Slugs
 loterias_map = {
-    "Mega-Sena": "megasena",
+    "Mega-Sena": "mega-sena",
     "Lotofácil": "lotofacil",
     "Quina": "quina",
     "Lotomania": "lotomania",
     "Timemania": "timemania",
-    "Dupla Sena": "duplasena",
-    "Dia de Sorte": "diadesorte"
+    "Dupla Sena": "dupla-sena",
+    "Dia de Sorte": "dia-de-sorte"
 }
 
-if st.button("🔄 Sincronizar Todos os Resultados Agora"):
-    st.divider()
+# 2. Barra Lateral para Seleção
+st.sidebar.header("Configurações")
+selecionadas = st.sidebar.multiselect(
+    "Quais loterias deseja conferir?",
+    options=list(loterias_map.keys()),
+    default=["Mega-Sena", "Lotofácil"]
+)
+
+if st.sidebar.button("🔄 Atualizar Resultados"):
+    st.rerun()
+
+# 3. Exibição e Conferência
+if selecionadas:
+    cols = st.columns(len(selecionadas) if len(selecionadas) <= 2 else 2)
     
-    # Criamos colunas para mostrar os resultados lado a lado
-    cols = st.columns(2)
-    
-    for i, (nome, slug) in enumerate(loterias_map.items()):
+    for i, nome in enumerate(selecionadas):
+        slug = loterias_map[nome]
         with cols[i % 2]:
             with st.spinner(f"Sincronizando {nome}..."):
-                dados = consultar_api_comunitaria(slug)
+                dados = consultar_api(slug)
                 
                 if dados:
                     with st.container(border=True):
-                        st.subheader(nome)
-                        # A API costuma retornar os campos 'concurso' e 'data'
-                        st.caption(f"Concurso {dados.get('concurso')} | Data: {dados.get('data')}")
+                        st.header(nome)
+                        st.caption(f"Concurso {dados.get('concurso')} ({dados.get('data')})")
                         
-                        # Renderização das Dezenas
-                        dezenas = dados.get('dezenas', [])
-                        if not dezenas: # Algumas APIs usam o nome 'resultado'
-                             dezenas = dados.get('resultado', [])
+                        # Resultados Oficiais (Dezenas da API)
+                        dezenas_oficiais = [str(d).zfill(2) for d in dados.get('dezenas', [])]
                         
+                        # Estilização das dezenas oficiais
                         bolas_html = "".join([
-                            f'<span style="background-color: #209869; color: white; padding: 5px 12px; '
-                            f'border-radius: 50%; margin: 3px; display: inline-block; font-weight: bold; '
-                            f'font-family: sans-serif;">{d}</span>' for d in dezenas
+                            f'<span style="background-color: #209869; color: white; padding: 5px 10px; '
+                            f'border-radius: 50%; margin: 2px; display: inline-block; font-weight: bold;">'
+                            f'{d}</span>' for d in dezenas_oficiais
                         ])
-                        st.markdown(bolas_html, unsafe_allow_html=True)
+                        st.markdown(f"**Sorteio:** {bolas_html}", unsafe_allow_html=True)
                         
-                        # Valor do prêmio
-                        valor = dados.get('valor_estimado_proximo_concurso', 'Consulte o site')
-                        st.write("")
-                        st.metric("Estimativa Próximo Prêmio", f"R$ {valor}")
+                        st.divider()
+                        
+                        # --- SEÇÃO CONFERIDOR ---
+                        st.subheader("🕵️ Conferir meu jogo")
+                        meu_jogo_input = st.text_input(
+                            f"Digite seus números da {nome} (separe por espaço ou vírgula):",
+                            key=f"input_{slug}"
+                        )
+                        
+                        if meu_jogo_input:
+                            # Trata o input do usuário (limpa espaços e vírgulas)
+                            meus_numeros = meu_jogo_input.replace(",", " ").split()
+                            meus_numeros = [n.zfill(2) for n in meus_numeros if n.isdigit()]
+                            
+                            if meus_numeros:
+                                # Lógica de comparação
+                                acertos = [n for n in meus_numeros if n in dezenas_oficiais]
+                                qtd_acertos = len(acertos)
+                                
+                                # Exibe o resultado da conferência
+                                if qtd_acertos > 0:
+                                    st.success(f"🔥 Você acertou **{qtd_acertos}** número(s)!")
+                                    st.write(f"**Números acertados:** {', '.join(acertos)}")
+                                else:
+                                    st.warning("Não houve acertos neste jogo.")
+                                    
+                                # Feedback visual rápido
+                                if nome == "Mega-Sena" and qtd_acertos >= 4:
+                                    st.balloons()
+                                    st.write("🎊 PARABÉNS! Você premiou!")
+                            else:
+                                st.error("Formato inválido. Digite apenas números.")
+                        
+                        st.divider()
+                        st.metric("Estimativa Próximo Prêmio", f"R$ {dados.get('estimativa_proximo_concurso', '0,00')}")
                 else:
-                    st.error(f"Não foi possível sincronizar a {nome} no momento.")
+                    st.error(f"Falha ao carregar {nome}.")
 else:
-    st.info("Clique no botão acima para carregar os resultados via API.")
-
-st.divider()
-st.caption("Nota: Este app depende de APIs mantidas por terceiros no GitHub. A precisão dos dados é de responsabilidade dos provedores.")
+    st.info("Selecione as loterias na barra lateral para começar.")
