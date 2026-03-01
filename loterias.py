@@ -1,71 +1,53 @@
 import streamlit as st
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
+from playwright.sync_api import sync_playwright
 import time
 
-# Configuração da página
-st.set_page_config(page_title="Scraper Loterias", page_icon="🔍")
+st.set_page_config(page_title="Loterias Scraper", page_icon="🎰")
 
-def scraping_loteria(modalidade):
-    # Configurações do Chrome para rodar sem abrir janela (Headless)
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    # User-agent para evitar detecção de robô
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    
-    url = f"https://loterias.caixa.gov.br/Paginas/{modalidade}.aspx"
-    
-    try:
-        driver.get(url)
+def scrape_caixa(modalidade):
+    with sync_playwright() as p:
+        # Abre um navegador "escondido"
+        browser = p.chromium.launch(headless=True)
+        # Cria um contexto com um User-Agent de pessoa real
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        page = context.new_page()
         
-        # Aguarda até que o elemento que contém as dezenas apareça (timeout de 20s)
-        wait = WebDriverWait(driver, 20)
-        # O seletor abaixo busca a lista de dezenas na estrutura do site da Caixa
-        elemento_resultado = wait.until(EC.presence_of_element_located((By.ID, "ulDezenas")))
+        url = f"https://loterias.caixa.gov.br/Paginas/{modalidade}.aspx"
         
-        # Extração dos dados
-        concurso_info = driver.find_element(By.CLASS_NAME, "title-bar").text
-        dezenas = [li.text for li in elemento_resultado.find_elements(By.TAG_NAME, "li")]
-        
-        return {
-            "info": concurso_info,
-            "dezenas": dezenas
-        }
-    except Exception as e:
-        return f"Erro: {e}"
-    finally:
-        driver.quit()
+        try:
+            page.goto(url, wait_until="networkidle", timeout=60000)
+            # Aguarda o elemento das dezenas carregar
+            page.wait_for_selector("#ulDezenas", timeout=30000)
+            
+            # Extrai o título do concurso e as dezenas
+            titulo = page.locator(".title-bar").inner_text()
+            dezenas = page.locator("#ulDezenas li").all_inner_texts()
+            
+            return {"titulo": titulo, "dezenas": dezenas}
+        except Exception as e:
+            return f"Erro ao acessar: {str(e)}"
+        finally:
+            browser.close()
 
-# Interface Streamlit
-st.title("🔍 Web Scraping Loterias")
-st.write("Extraindo dados diretamente do portal oficial via Selenium.")
+st.title("🎰 Scraping Oficial Loterias")
 
-modalidade_escolhida = st.selectbox("Selecione a Loteria", ["Mega-Sena", "Lotofacil", "Quina"])
-mapa_url = {"Mega-Sena": "Mega-Sena", "Lotofacil": "Lotofacil", "Quina": "Quina"}
+option = st.selectbox("Escolha a loteria:", ["Mega-Sena", "Lotofacil", "Quina"])
 
-if st.button("Buscar Resultado"):
-    with st.spinner("Simulando navegador e acessando o site da Caixa..."):
-        resultado = scraping_loteria(mapa_url[modalidade_escolhida])
+if st.button("Buscar Resultado Atual"):
+    with st.spinner("Navegando no site da Caixa..."):
+        # Ajusta o nome para a URL (ex: Mega-Sena)
+        resultado = scrape_caixa(option)
         
         if isinstance(resultado, dict):
-            st.success("Dados extraídos com sucesso!")
-            st.subheader(resultado["info"])
+            st.success("Dados capturados!")
+            st.markdown(f"### {resultado['titulo']}")
             
-            # Mostra as dezenas em destaque
-            colunas = st.columns(len(resultado["dezenas"]))
-            for i, dezena in enumerate(resultado["dezenas"]):
-                colunas[i].metric("", dezena)
+            # Mostra as dezenas de forma bonita
+            cols = st.columns(len(resultado['dezenas']))
+            for i, d in enumerate(resultado['dezenas']):
+                cols[i].markdown(f"## {d}")
         else:
             st.error(resultado)
-
-st.warning("Nota: Web scraping é mais lento que API e pode falhar se a Caixa mudar a estrutura do site.")
+            st.info("Dica: O site da Caixa pode estar lento ou bloqueando o servidor da nuvem.")
