@@ -1,70 +1,90 @@
 import streamlit as st
 import requests
-import urllib3
-import pandas as pd
 
-# 1. Configurações de Segurança e Interface
-st.set_page_config(page_title="Loterias Caixa - Resultados", page_icon="💰", layout="wide")
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# 1. Configurações da Página
+st.set_page_config(page_title="Loterias Caixa - Resultados", page_icon="💰", layout="centered")
 
-# 2. Função Robusta para buscar os dados
-def obter_resultado_caixa(modalidade):
-    # Usar Session ajuda a manter cookies que o servidor da Caixa pode exigir
-    session = requests.Session()
+# Função para buscar dados da API estável
+def buscar_resultado(modalidade):
+    # Esta API é mantida por terceiros e costuma ignorar bloqueios que o site da Caixa impõe
+    url = f"https://loterica.com.br/api/v1/{modalidade}/ultimo"
     
-    url = f"https://servicebus2.caixa.gov.br/portalloterias/api/{modalidade}"
-    
-    # Headers completos para simular um navegador Chrome real
-    headers = {
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Connection": "keep-alive",
-        "Host": "servicebus2.caixa.gov.br",
-        "Origin": "https://loterias.caixa.gov.br",
-        "Referer": "https://loterias.caixa.gov.br/",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    }
-
     try:
-        # Timeout maior (20s) pois o servidor da Caixa costuma ser lento
-        response = session.get(url, headers=headers, verify=False, timeout=20)
-        
+        response = requests.get(url, timeout=15)
         if response.status_code == 200:
             return response.json()
         else:
-            return f"Erro {response.status_code}: Servidor recusou a conexão."
+            return None
     except Exception as e:
-        return f"Erro de conexão: {str(e)}"
+        return None
 
-# 3. Interface Streamlit
-st.title("🎰 Resultados Oficiais Loterias Caixa")
-st.markdown("Consulta em tempo real dos últimos sorteios via API oficial.")
+# 2. Interface do Usuário
+st.title("🎰 Resultados Loterias Caixa")
+st.markdown("Consulte os dados do último concurso de forma estável e rápida.")
 
-# Sidebar - Configurações
+# Dicionário para mapear nomes amigáveis para os endpoints da API
+loterias_map = {
+    "Mega-Sena": "mega-sena",
+    "Lotofácil": "lotofacil",
+    "Quina": "quina",
+    "Lotomania": "lotomania",
+    "TimeMania": "timemania",
+    "Dupla Sena": "dupla-sena",
+    "Dia de Sorte": "dia-de-sorte",
+    "Mais Milionária": "mais-milionaria"
+}
+
+# Menu Lateral
 st.sidebar.header("Configurações")
-loterias_lista = [
-    "megasena", "lotofacil", "quina", "lotomania", 
-    "timemania", "duplasena", "maismilionaria", "diadesorte"
-]
-
 selecionadas = st.sidebar.multiselect(
-    "Selecione as modalidades:",
-    options=loterias_lista,
-    default=["megasena", "lotofacil"]
+    "Selecione as Loterias:",
+    options=list(loterias_map.keys()),
+    default=["Mega-Sena", "Lotofácil"]
 )
 
 if st.sidebar.button("🔄 Atualizar Dados"):
     st.rerun()
 
-# 4. Exibição dos Resultados
+# 3. Processamento e Exibição
 if selecionadas:
-    for loteria in selecionadas:
-        with st.spinner(f"Consultando {loteria.upper()}..."):
-            dados = obter_resultado_caixa(loteria)
-
-            if isinstance(dados, dict):
-                # Layout de colunas para cada card
+    for nome_exibicao in selecionadas:
+        slug = loterias_map[nome_exibicao]
+        
+        with st.spinner(f"Carregando {nome_exibicao}..."):
+            dados = buscar_resultado(slug)
+            
+            if dados:
+                # Criando um card visual para cada loteria
                 with st.container():
-                    st.markdown(f"### {loteria.upper()}")
-                    c1, c2, c3 = st.columns([1, 2, 1])
+                    st.subheader(f"📊 {nome_exibicao}")
+                    
+                    col1, col2 = st.columns([1, 1])
+                    
+                    with col1:
+                        st.metric("Número do Concurso", dados.get('concurso'))
+                        st.write(f"**Data do Sorteio:** {dados.get('data')}")
+                    
+                    with col2:
+                        # Tratamento para o prêmio estimado
+                        premio = dados.get('estimativa_proximo_concurso', 0)
+                        try:
+                            # Tenta converter para float para formatar como moeda
+                            valor_formatado = f"R$ {float(premio):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                            st.metric("Próximo Prêmio", valor_formatado)
+                        except:
+                            st.metric("Próximo Prêmio", f"R$ {premio}")
+                    
+                    # Exibição das Dezenas
+                    dezenas = dados.get('dezenas', [])
+                    if dezenas:
+                        st.markdown("**Dezenas Sorteadas:**")
+                        # Cria uma linha de "bolinhas" visuais
+                        st.info("  •  ".join(dezenas))
+                    
+                    st.divider()
+            else:
+                st.error(f"Não foi possível obter dados para: {nome_exibicao}. O servidor pode estar em manutenção.")
+else:
+    st.info("Utilize o menu lateral para selecionar as loterias que deseja consultar.")
+
+st.caption("Nota: Dados fornecidos via API Loterica (Fonte alternativa estável).")
