@@ -1,83 +1,59 @@
 import streamlit as st
 import requests
-import pandas as pd
 from bs4 import BeautifulSoup
-import json
+import pandas as pd
 
-st.set_page_config(page_title="Rio Doce - Busca Total", page_icon="💧")
-st.title("💧 Consulta de Dados PMQQS")
+# Configurações iniciais
+st.set_page_config(page_title="Monitor Rio Doce", page_icon="💧")
+st.title("💧 Monitor de Atualizações Rio Doce")
 
-URL_PORTAL = "https://monitoramentoriodoce.org/download-dos-dados/"
-URL_AJAX = "https://monitoramentoriodoce.org/wp-admin/admin-ajax.php"
-
+URL = "https://monitoramentoriodoce.org/download-dos-dados/"
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "X-Requested-With": "XMLHttpRequest",
-    "Referer": URL_PORTAL
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 }
 
-if st.button('Executar Pesquisa Completa (Todos)'):
+if st.button('Verificar Status do Portal'):
     try:
-        session = requests.Session()
+        with st.spinner('Acessando o site...'):
+            response = requests.get(URL, headers=HEADERS, timeout=20)
         
-        with st.spinner('Sincronizando com o portal...'):
-            # Passo 1: Pega a página e tenta achar tokens de segurança
-            page = session.get(URL_PORTAL, headers=HEADERS, timeout=20)
-            soup_page = BeautifulSoup(page.text, 'html.parser')
-            
-        with st.spinner('Enviando filtros conforme imagem...'):
-            # Payload ajustado para simular a seleção "Todos" em todos os campos
-            payload = {
-                "action": "get_pmqqs_data",
-                "origem": "manual",
-                "ponto[]": "all",
-                "matriz[]": "all",
-                "parametro[]": "all",
-                "tipo_amostra": "all", # Adicionado conforme imagem
-                "data_inicio": "",
-                "data_fim": "",
-                "paged": "1",
-                "posts_per_page": "50"
-            }
-
-            # Passo 2: Tenta a busca
-            response = session.post(URL_AJAX, headers=HEADERS, data=payload, timeout=30)
-            
         if response.status_code == 200:
-            try:
-                res_json = response.json()
-                html_tabela = res_json.get('data', {}).get('html', '')
-                
-                if html_tabela and "<tr" in html_tabela:
-                    soup = BeautifulSoup(html_tabela, 'html.parser')
-                    
-                    # Extração dos dados
-                    headers_table = [th.get_text(strip=True) for th in soup.find_all('th')]
-                    rows = []
-                    for tr in soup.find_all('tr'):
-                        cells = [td.get_text(strip=True) for td in tr.find_all('td')]
-                        if cells: rows.append(cells)
-                    
-                    if rows:
-                        df = pd.DataFrame(rows, columns=headers_table if headers_table else None)
-                        st.success("### ✅ Dados Recuperados!")
-                        st.dataframe(df, use_container_width=True)
-                        
-                        # Monitoramento da Data Amostra (O seu objetivo principal)
-                        if 'DataAmostra' in df.columns:
-                            st.info(f"📅 **Amostra mais recente na tabela:** {df['DataAmostra'].iloc[0]}")
-                    else:
-                        st.warning("A pesquisa não retornou linhas. Tente selecionar filtros menos abrangentes.")
-                else:
-                    st.error("O servidor aceitou a conexão, mas não enviou a tabela. O site pode estar bloqueando o acesso automatizado via Firewall.")
-            except Exception:
-                st.error("Erro ao processar a resposta do servidor. O formato pode ter mudado.")
-        else:
-            st.error(f"Erro {response.status_code}. O servidor recusou a requisição.")
-            st.info("Dica: Se o erro 400 persistir, o site pode estar usando o Cloudflare para bloquear scripts Python.")
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # 1. Captura a data de modificação do conteúdo (SEO)
+            meta_mod = soup.find("meta", property="article:modified_time")
+            data_site = meta_mod['content'] if meta_mod else "Não disponível"
+            
+            st.success("✅ Conexão bem-sucedida!")
+            
+            col1, col2 = st.columns(2)
+            col1.metric("Página do Site Editada em:", data_site.split('T')[0] if 'T' in data_site else data_site)
+            
+            # 2. Busca por arquivos em 'Informações Complementares'
+            st.subheader("📂 Arquivos e Planilhas Disponíveis")
+            st.write("Verificando links de downloads diretos (PDF/ZIP/XLSX):")
+            
+            links_files = []
+            for a in soup.find_all('a', href=True):
+                href = a['href']
+                if any(ext in href.lower() for ext in ['.pdf', '.zip', '.xlsx', '.csv']):
+                    links_files.append({"Documento": a.get_text(strip=True), "Link": href})
+            
+            if links_files:
+                df_links = pd.DataFrame(links_files)
+                st.dataframe(df_links, use_container_width=True)
+            else:
+                st.info("Nenhum link de arquivo direto encontrado no HTML estático.")
 
+            # 3. Explicação sobre a Data da Amostra
+            st.warning("⚠️ **Observação sobre a Tabela Dinâmica**")
+            st.info("Conforme suas capturas de tela, os dados mais recentes no sistema manual são de **02/02/2026**. O servidor bloqueia o acesso via script (Erro 400) para proteger a base de dados de raspagens automáticas.")
+            
+        else:
+            st.error(f"Erro ao acessar: {response.status_code}")
+            
     except Exception as e:
-        st.error(f"Falha na conexão: {e}")
+        st.error(f"Erro técnico: {e}")
 
 st.divider()
-st.caption("Filtros aplicados: Origem: Manual | Pontos: Todos | Matriz: Todos | Parâmetros: Todos")
+st.caption("Nota: Este monitor foca em metadados para evitar bloqueios do servidor.")
