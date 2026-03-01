@@ -1,38 +1,48 @@
 import streamlit as st
 import requests
+from datetime import datetime
 
-# Configuração da página (opcional)
-st.set_page_config(page_title="Monitoramento Rio Doce - Verificador", page_icon="💧")
+st.set_page_config(page_title="Data de Atualização Rio Doce", page_icon="📅")
 
-st.title("Verificador de Atualização de Dados")
-st.write("Verificando a última data de modificação da página de downloads do Rio Doce...")
+st.title("📅 Monitor de Atualização de Dados")
+st.write("Acessando metadados internos via WordPress REST API...")
 
-url = "https://monitoramentoriodoce.org/download-dos-dados/"
+# O ID 28 foi identificado no seu cabeçalho como a página de downloads
+api_url = "https://monitoramentoriodoce.org/wp-json/wp/v2/pages/28"
 
-# Botão para disparar a verificação
-if st.button('Verificar agora'):
+if st.button('Consultar Data de Inclusão/Atualização'):
     try:
-        # Fazemos a requisição HEAD para economizar banda (não baixa o conteúdo, apenas o cabeçalho)
-        response = requests.head(url, allow_redirects=True)
+        response = requests.get(api_url)
         
-        # Tenta obter o cabeçalho 'Last-Modified'
-        last_modified = response.headers.get('Last-Modified')
-        
-        if last_modified:
-            st.success(f"✅ **Data de modificação informada pelo servidor:**")
-            st.info(last_modified)
-            st.caption("Nota: Esta data refere-se à última alteração na estrutura da página ou arquivo no servidor.")
-        else:
-            st.warning("⚠️ O servidor não fornece uma data 'Last-Modified' direta nos cabeçalhos HTTP.")
-            st.write("Isso é comum em sites dinâmicos (WordPress/CMS).")
+        if response.status_code == 200:
+            data = response.json()
             
-        # Exibe outros detalhes técnicos úteis para o desenvolvedor
-        with st.expander("Ver detalhes técnicos (Headers)"):
-            st.json(dict(response.headers))
+            # Extraindo as datas do JSON da API
+            data_criacao = data.get('date')
+            data_modificacao = data.get('modified')
+            titulo_pagina = data.get('title', {}).get('rendered', 'Página de Downloads')
+
+            # Formatando as datas para PT-BR
+            dt_cria = datetime.fromisoformat(data_criacao).strftime('%d/%m/%Y %H:%M:%S')
+            dt_mod = datetime.fromisoformat(data_modificacao).strftime('%d/%m/%Y %H:%M:%S')
+
+            st.success(f"### {titulo_pagina}")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Página Criada em", dt_cria)
+            with col2:
+                st.metric("Última Atualização", dt_mod)
+
+            st.info("💡 **O que isso significa?** A 'Última Atualização' indica quando um administrador alterou o conteúdo desta página (ex: substituiu um link de download ou editou o texto).")
+            
+            with st.expander("Ver resposta bruta da API"):
+                st.json(data)
+        else:
+            st.error(f"Não foi possível acessar a API. Status: {response.status_code}")
 
     except Exception as e:
-        st.error(f"Erro ao acessar o site: {e}")
+        st.error(f"Erro na requisição: {e}")
 
-# Rodapé informando a URL monitorada
 st.divider()
-st.caption(f"Monitorando: {url}")
+st.caption("Nota: Se os arquivos CSV são atualizados sem alterar o link na página, esta data pode não mudar. Para monitorar os arquivos físicos, seria necessário listar o diretório /wp-content/uploads/ (geralmente protegido).")
