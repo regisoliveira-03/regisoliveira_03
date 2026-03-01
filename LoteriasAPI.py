@@ -1,67 +1,74 @@
 import streamlit as st
 import requests
 
-# Configurações da página
-st.set_page_config(page_title="API Loterias GitHub", page_icon="📈")
+# Configuração da página
+st.set_page_config(page_title="Resultados Loterias API", page_icon="💰", layout="wide")
 
-def consultar_api_github(loteria):
+def consultar_loteria_v2(modalidade):
     """
-    Utiliza uma API pública mantida pela comunidade no GitHub.
-    Fonte base: https://github.com/guto-viana/loterias-api
+    Consulta uma API alternativa e estável baseada em projetos do GitHub.
     """
-    # Endpoint da API (esta é uma das mais estáveis)
-    url = f"https://loteriacaixa.com.br/api/{loteria}"
+    # Usando a API v2 da Loteriascaixa-api (uma das mais estáveis)
+    url = f"https://loterica.com.br/api/v1/{modalidade}/ultimo"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
     
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, headers=headers, timeout=15)
         if response.status_code == 200:
             return response.json()
-        else:
-            return f"Erro na API: Status {response.status_code}"
-    except Exception as e:
-        return f"Erro de conexão: {str(e)}"
+        return None
+    except:
+        return None
 
 # --- Interface Streamlit ---
-st.title("📈 Painel Loterias via API Comunitária")
-st.markdown("Este app utiliza dados de APIs mantidas por desenvolvedores no GitHub.")
+st.title("💰 Painel de Loterias - API GitHub")
+st.markdown("Consulte todos os resultados atuais de uma só vez via API JSON.")
 
-# Mapeamento de nomes para a API
-loterias_api = {
-    "Mega-Sena": "megasena",
+# Lista de loterias suportadas
+loterias_slugs = {
+    "Mega-Sena": "mega-sena",
     "Lotofácil": "lotofacil",
     "Quina": "quina",
     "Lotomania": "lotomania",
     "Timemania": "timemania",
-    "Dia de Sorte": "diadesorte"
+    "Dupla Sena": "dupla-sena",
+    "Dia de Sorte": "dia-de-sorte"
 }
 
-# Layout em colunas
-st.subheader("Resultados Atuais")
-if st.button("🔄 Sincronizar Tudo Agora"):
+if st.button("🔄 Sincronizar Todos os Resultados"):
+    # Criamos uma grade de colunas
     cols = st.columns(2)
-    for idx, (nome, slug) in enumerate(loterias_api.items()):
-        with cols[idx % 2]:
-            with st.spinner(f"Lendo {nome}..."):
-                dados = consultar_api_github(slug)
+    
+    for i, (nome, slug) in enumerate(loterias_slugs.items()):
+        with cols[i % 2]:
+            with st.spinner(f"Buscando {nome}..."):
+                dados = consultar_loteria_v2(slug)
                 
-                if isinstance(dados, dict):
+                if dados:
                     with st.container(border=True):
-                        st.markdown(f"### {nome}")
-                        st.caption(f"Concurso {dados.get('concurso')} • {dados.get('data')}")
+                        st.subheader(nome)
+                        st.caption(f"Concurso {dados.get('concurso')} ({dados.get('data')})")
                         
-                        # Exibição das dezenas (geralmente vêm como lista ou string separada)
+                        # Exibição das dezenas
                         dezenas = dados.get('dezenas', [])
+                        bolas_html = "".join([
+                            f'<span style="background-color: #209869; color: white; padding: 5px 10px; '
+                            f'border-radius: 50%; margin: 3px; display: inline-block; font-weight: bold;">'
+                            f'{d}</span>' for d in dezenas
+                        ])
+                        st.markdown(bolas_html, unsafe_allow_html=True)
                         
-                        # Estilização visual
-                        bolas = " ".join([f"**[{d}]**" for d in dezenas])
-                        st.markdown(bolas)
-                        
-                        proximo = dados.get('proximo_estimativa', 'Consulte o site')
-                        st.metric("Estimativa Próximo Prêmio", f"R$ {proximo}")
+                        st.write("")
+                        # Valor estimado do próximo prêmio
+                        proximo = dados.get('estimativa_proximo_concurso', 'Consulte o site')
+                        st.metric("Próximo Prêmio", f"R$ {proximo}")
                 else:
-                    st.error(f"{nome}: {dados}")
+                    st.error(f"Falha ao obter dados da {nome}.")
 else:
-    st.info("Clique no botão para buscar todos os dados via API externa.")
+    st.info("Clique no botão acima para carregar os resultados via API.")
 
 st.divider()
-st.caption("Nota: Os dados são provenientes de repositórios do GitHub. A precisão depende da atualização dos mantenedores dessas APIs.")
+st.caption("Fonte: API baseada em repositórios comunitários do GitHub.")
