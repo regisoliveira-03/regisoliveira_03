@@ -1,103 +1,78 @@
 import streamlit as st
 from playwright.sync_api import sync_playwright
-import os
 
-st.set_page_config(page_title="Painel Loterias Caixa", page_icon="🎰", layout="wide")
+# Configuração da página
+st.set_page_config(page_title="Resultados Individuais Loterias", page_icon="🎰")
 
-def buscar_resultados():
-    modalidades = {
-        "Mega-Sena": "Mega-Sena",
-        "Lotofácil": "Lotofacil",
-        "Quina": "Quina",
-        "Lotomania": "Lotomania",
-        "Dupla Sena": "Dupla-Sena",
-        "Dia de Sorte": "Dia-de-Sorte"
-    }
-    
-    resultados = {}
-
+def buscar_loteria_unica(modalidade_slug):
+    """Busca apenas uma modalidade por vez para garantir estabilidade"""
     with sync_playwright() as p:
         try:
-            browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
+            # Lançamento do browser com configurações de estabilidade
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
             context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             page = context.new_page()
-
-            progresso = st.progress(0)
-            status_text = st.empty()
-
-            for i, (nome, slug) in enumerate(modalidades.items()):
-                status_text.text(f"Consultando {nome}...")
-                url = f"https://loterias.caixa.gov.br/Paginas/{slug}.aspx"
-                
-                # Sistema de tentativa dupla para evitar o erro de "Falha ao carregar"
-                sucesso = False
-                for tentativa in range(2): 
-                    try:
-                        page.goto(url, wait_until="domcontentloaded", timeout=45000)
-                        # Espera especificamente pelas dezenas ou pela classe de erro
-                        page.wait_for_selector("#ulDezenas", timeout=15000)
-                        
-                        concurso = page.locator(".title-bar").inner_text()
-                        dezenas = page.locator("#ulDezenas li").all_inner_texts()
-                        
-                        # Limpa dezenas vazias se houver
-                        dezenas = [d for d in dezenas if d.strip()]
-                        
-                        try:
-                            proximo = page.locator(".next-prize .value").first.inner_text()
-                        except:
-                            proximo = "Acumulado / Ver site"
-
-                        resultados[nome] = {
-                            "concurso": concurso,
-                            "dezenas": dezenas,
-                            "proximo": proximo
-                        }
-                        sucesso = True
-                        break # Sai do loop de tentativa se funcionar
-                    except:
-                        continue # Tenta de novo se falhar a primeira vez
-                
-                if not sucesso:
-                    resultados[nome] = {"erro": "Site da Caixa não respondeu a tempo."}
-                
-                progresso.progress((i + 1) / len(modalidades))
             
-            status_text.empty()
-            progresso.empty()
-            return resultados
-
+            url = f"https://loterias.caixa.gov.br/Paginas/{modalidade_slug}.aspx"
+            
+            # Navegação focada
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            page.wait_for_selector("#ulDezenas", timeout=20000)
+            
+            # Extração
+            titulo = page.locator(".title-bar").inner_text()
+            dezenas = page.locator("#ulDezenas li").all_inner_texts()
+            
+            try:
+                proximo = page.locator(".next-prize .value").first.inner_text()
+            except:
+                proximo = "Verificar no site"
+                
+            return {"titulo": titulo, "dezenas": dezenas, "proximo": proximo}
         except Exception as e:
-            return f"Erro Crítico: {str(e)}"
+            return f"Erro: O site da Caixa demorou a responder. Tente novamente. ({str(e)})"
         finally:
-            if 'browser' in locals():
-                browser.close()
+            browser.close()
 
-st.title("🎰 Painel Completo de Loterias")
+# --- Interface ---
+st.title("🎰 Consulta Individual de Loterias")
+st.write("Selecione a loteria desejada para uma busca dedicada e estável.")
 
-if st.button("🔄 Sincronizar Todos os Resultados"):
-    dados = buscar_resultados()
-    
-    if isinstance(dados, dict):
-        # Exibição em cards
-        cols = st.columns(2)
-        for idx, (nome, info) in enumerate(dados.items()):
-            with cols[idx % 2]:
-                with st.container(border=True):
-                    st.header(nome)
-                    if "erro" in info:
-                        st.warning(info["erro"])
-                        if st.button(f"Tentar {nome} individualmente"):
-                             # Lógica simples para re-tentar apenas um poderia ser add aqui
-                             pass
-                    else:
-                        st.caption(info["concurso"])
-                        # Renderização das bolas
-                        bolas_html = "".join([f'<span style="background-color: #209869; color: white; padding: 6px 12px; border-radius: 50%; margin: 3px; display: inline-block; font-weight: bold; border: 1px solid #146e4b;">{d}</span>' for d in info["dezenas"]])
-                        st.markdown(bolas_html, unsafe_allow_html=True)
-                        st.write("")
-                        st.metric("Estimativa Próximo Prêmio", info["proximo"])
-    else:
-        st.error(dados)
+loterias = {
+    "Mega-Sena": "Mega-Sena",
+    "Lotofácil": "Lotofacil",
+    "Quina": "Quina",
+    "Lotomania": "Lotomania",
+    "Dupla Sena": "Dupla-Sena",
+    "Dia de Sorte": "Dia-de-Sorte",
+    "Timemania": "Timemania"
+}
 
-st.caption("Nota: Se algumas loterias falharem, clique em atualizar novamente. O servidor da Caixa possui limites de conexão.")
+# Usando colunas para criar botões de acesso rápido
+st.subheader("Qual resultado deseja conferir?")
+cols = st.columns(3)
+
+for i, nome in enumerate(loterias.keys()):
+    with cols[i % 3]:
+        if st.button(f"Ver {nome}", use_container_width=True):
+            with st.spinner(f"Acessando {nome}..."):
+                res = buscar_loteria_unica(loterias[nome])
+                
+                if isinstance(res, dict):
+                    st.toast(f"Resultado da {nome} carregado!", icon="✅")
+                    # Exibição do Card de Resultado
+                    with st.container(border=True):
+                        st.header(nome)
+                        st.caption(res["titulo"])
+                        
+                        # Dezenas estilizadas
+                        bolas = "".join([f'<span style="background-color: #209869; color: white; padding: 8px 15px; border-radius: 50%; margin: 5px; display: inline-block; font-weight: bold; font-size: 20px;">{d}</span>' for d in res["dezenas"] if d.strip()])
+                        st.markdown(bolas, unsafe_allow_html=True)
+                        
+                        st.divider()
+                        st.metric("Estimativa Próximo Prêmio", res["proximo"])
+                else:
+                    st.error(res)
+
+st.divider()
+st.info("💡 Consultar uma por vez evita bloqueios de tráfego e garante que os dados carreguem corretamente.")
