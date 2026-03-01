@@ -1,73 +1,62 @@
 import streamlit as st
 import requests
+import pandas as pd
 from bs4 import BeautifulSoup
-import re
 
-st.set_page_config(page_title="Monitor Rio Doce", page_icon="💧")
+st.set_page_config(page_title="Rio Doce - Monitor de Dados", page_icon="💧")
 
-st.title("🔍 Verificador de Atualização de Dados")
-st.write("Tentando extrair datas de modificação via HTML (Web Scraping)...")
+st.title("🔍 Verificador de Novos Dados - Rio Doce")
 
-url = "https://monitoramentoriodoce.org/download-dos-dados/"
+url_page = "https://monitoramentoriodoce.org/download-dos-dados/"
+# Endpoint interno que o site usa para buscar os dados da tabela
+url_api_busca = "https://monitoramentoriodoce.org/wp-admin/admin-ajax.php"
 
-# Headers para simular um navegador real e evitar o erro 401/403
 headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
 }
 
-if st.button('Verificar Site'):
+if st.button('Buscar Dados Recentes na Tabela'):
     try:
-        # Realiza a requisição GET completa
-        response = requests.get(url, headers=headers, timeout=15)
+        # Payload que simula a busca padrão do site (sem filtros específicos)
+        payload = {
+            "action": "get_pmqqs_data",
+            "paged": 1,
+            "posts_per_page": 10  # Pegamos os 10 primeiros para ver o que há de novo
+        }
+
+        response = requests.post(url_api_busca, headers=headers, data=payload)
         
         if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
+            json_data = response.json()
+            # O site retorna o HTML da tabela dentro de um JSON
+            html_tabela = json_data.get('data', {}).get('html', '')
             
-            # Estratégia 1: Procurar por metadados de SEO (Yoast ou similar)
-            # Geralmente o WordPress insere a data de modificação em tags <meta>
-            meta_modified = soup.find("meta", property="article:modified_time") or \
-                            soup.find("meta", {"name": "last-modified"})
-            
-            # Estratégia 2: Procurar dentro do JSON-LD (Scripts de metadados)
-            json_ld = soup.find_all('script', type='application/ld+json')
-            date_found = None
-            
-            if meta_modified:
-                date_found = meta_modified.get('content')
-            else:
-                # Busca por padrões de data no texto ou em scripts internos
-                for script in json_ld:
-                    match = re.search(r'"dateModified":"([^"]+)"', script.string if script.string else "")
-                    if match:
-                        date_found = match.group(1)
-                        break
-
-            if date_found:
-                st.success("### Data de Modificação Encontrada!")
-                st.metric("Última alteração no conteúdo:", date_found)
-                st.info("Esta data indica a última vez que o conteúdo da página (incluindo links de download) foi editado no sistema.")
-            else:
-                st.warning("O site não expõe a data de modificação de forma visível no HTML.")
-                st.write("Isso acontece quando o cache do servidor está mascarando os metadados.")
+            if html_tabela:
+                soup = BeautifulSoup(html_tabela, 'html.parser')
+                rows = []
+                # Extraindo linhas da tabela
+                for tr in soup.find_all('tr')[1:]: # Pula o cabeçalho
+                    cols = [td.get_text(strip=True) for td in tr.find_all('td')]
+                    if cols:
+                        rows.append(cols)
                 
-            # Extra: Listar links de download para ver se há datas nos nomes dos arquivos
-            st.subheader("Arquivos detectados para download:")
-            links = soup.find_all('a', href=True)
-            zip_links = [l['href'] for l in links if '.zip' in l['href'] or '.csv' in l['href']]
-            
-            if zip_links:
-                for link in zip_links:
-                    st.write(f"📄 {link.split('/')[-1]}")
+                # Criando um DataFrame para facilitar a visualização
+                df = pd.DataFrame(rows, columns=["Ponto", "Data Amostra", "Hora", "Lat", "Long", "Matriz", "Tipo", "Cianobactéria"])
+                
+                st.success("### Dados mais recentes encontrados na tabela:")
+                st.table(df.head(5))
+                
+                # Identificando a data mais recente
+                ultima_data = df['Data Amostra'].iloc[0]
+                st.info(f"💡 **Conclusão:** O dado mais recente inserido no sistema é do dia **{ultima_data}**.")
             else:
-                st.write("Nenhum link direto de arquivo (.zip/.csv) encontrado nesta página.")
-
+                st.warning("A busca retornou vazia. O site pode ter mudado o formato da requisição.")
         else:
-            st.error(f"Erro ao acessar o site. Status: {response.status_code}")
-            if response.status_code == 401:
-                st.info("O servidor continua bloqueando o acesso automático. O site pode estar usando um Firewall (WAF) agressivo.")
+            st.error(f"Erro na requisição: {response.status_code}")
 
     except Exception as e:
-        st.error(f"Erro na conexão: {e}")
+        st.error(f"Erro ao processar dados: {e}")
 
 st.divider()
-st.caption("Nota: Se o site for atualizado apenas via banco de dados sem alterar o HTML, o scraping pode não refletir a mudança instantaneamente.")
+st.caption("Nota: Este script acessa o formulário de pesquisa dinâmico do site.")
