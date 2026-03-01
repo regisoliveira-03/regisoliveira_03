@@ -1,0 +1,5 @@
+libevent-2.1-7
+libgnome-keyring0
+libnotify4
+libxslt1.1
+libxtst6
