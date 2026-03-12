@@ -2,3 +2,6 @@ streamlit
 selenium
 webdriver-manager
 pandas
+streamlit
+huggingface_hub
+Pillow
