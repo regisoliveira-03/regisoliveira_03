@@ -1,124 +1,73 @@
-Para criar o seu aplicativo no GitHub e rodá-lo no Streamlit.io, você precisará de dois arquivos principais na raiz do seu repositório: `requirements.txt` (para instalar as dependências) e `app.py` (o código do sistema).
-
-Como você mencionou o uso do **spaCy** para extração de entidades e o **Pyvis** para a visualização, o script abaixo integra esses elementos, utilizando os itens técnicos (Fontes, Vias e Receptores) que você descreveu nos seus documentos.
-
-### 1. Arquivo `requirements.txt`
-Este arquivo indica ao Streamlit quais bibliotecas instalar.
-```text
-streamlit
-pandas
-pyvis
-spacy
-https://github.com/explosion/spacy-models/releases/download/pt_core_news_lg-3.7.0/pt_core_news_lg-3.7.0-py3-none-any.whl
-```
-
----
-
-### 2. Arquivo `app.py` (Script Completo)
-Este código remove qualquer dependência de interfaces desktop (como CustomTkinter) e foca 100% na experiência web do Streamlit.
-
-```python
 import streamlit as st
 import spacy
 import pandas as pd
 from pyvis.network import Network
 import streamlit.components.v1 as components
 
-# Configuração da página
-st.set_page_config(page_title="Gerador de MCA Inteligente", layout="wide")
+# 1. Configuração da Página
+st.set_page_config(page_title="Gerador de MCA", layout="wide")
 
-# Carregamento do modelo spaCy (otimizado com cache)
+# 2. Carregamento do Modelo spaCy (Otimizado)
 @st.cache_resource
 def load_nlp():
-    return spacy.load("pt_core_news_lg")
+    try:
+        return spacy.load("pt_core_news_lg")
+    except:
+        # Fallback caso o nome mude no ambiente virtual
+        return spacy.load("pt_core_news_lg")
 
 nlp = load_nlp()
 
-# Base de dados baseada no seu documento "MCA itens"
+# 3. Base de Dados Técnica (Conforme seus documentos ABNT/CETESB)
 DATABASE_MCA = {
     "Fontes": ["Tanque UST", "Tanque AST", "Tubulações", "Aterro", "Lagoa de Efluentes", "Solo Contaminado", "Fase Livre", "Pluma"],
-    "Vias": ["Ingestão de Água", "Inalação de Vapores", "Contato Dérmico", "Absorção Radicular", "Poeira"],
-    "Receptores": ["Residentes", "Trabalhadores", "Usuários de Água", "Biota Aquática", "Peixes", "Aves", "Gado"]
+    "Vias": ["Ingestão de Água", "Inalação de Vapores", "Contato Dérmico", "Absorção Radicular"],
+    "Receptores": ["Residentes", "Trabalhadores", "Biota Aquática", "Peixes", "Gado"]
 }
 
-st.title("🛠️ Gerador de Modelo Conceitual do Site (MCA)")
-st.markdown("Extraia entidades de relatórios ambientais e gere diagramas automáticos.")
+st.title("🌱 Gerador de Modelo Conceitual (MCA)")
+st.markdown("Analise relatórios ambientais e gere o diagrama de fontes, vias e receptores.")
 
-# --- SEÇÃO 1: EXTRAÇÃO DE ENTIDADES ---
-st.header("1. Análise de Relatório Técnica")
-texto_input = st.text_area("Cole aqui o trecho do relatório ou parecer técnico:", height=200, 
-                           placeholder="Ex: Foi identificado um vazamento no tanque UST gerando pluma de fase livre...")
-
+# --- SEÇÃO: EXTRAÇÃO ---
+texto_input = st.text_area("Cole o texto do relatório aqui:", height=150)
 sugestoes = {"Fontes": [], "Vias": [], "Receptores": []}
 
 if texto_input:
-    doc = nlp(texto_input.lower())
-    for categoria, itens in DATABASE_MCA.items():
+    # Processamento simples de NLP para sugerir termos conhecidos
+    texto_min = texto_input.lower()
+    for cat, itens in DATABASE_MCA.items():
         for item in itens:
-            if item.lower() in doc.text:
-                if item not in sugestoes[categoria]:
-                    sugestoes[categoria].append(item)
+            if item.lower() in texto_min:
+                sugestoes[cat].append(item)
 
-# --- SEÇÃO 2: REFINAMENTO DOS ITENS ---
-st.header("2. Refine os Itens do Diagrama")
+# --- SEÇÃO: REFINAMENTO ---
 col1, col2, col3 = st.columns(3)
-
 with col1:
-    fontes_sel = st.multiselect("Fontes Selecionadas", options=DATABASE_MCA["Fontes"], default=sugestoes["Fontes"])
+    f_sel = st.multiselect("Fontes", DATABASE_MCA["Fontes"], default=sugestoes["Fontes"])
 with col2:
-    vias_sel = st.multiselect("Vias Selecionadas", options=DATABASE_MCA["Vias"], default=sugestoes["Vias"])
+    v_sel = st.multiselect("Vias", DATABASE_MCA["Vias"], default=sugestoes["Vias"])
 with col3:
-    receptores_sel = st.multiselect("Receptores Selecionados", options=DATABASE_MCA["Receptores"], default=sugestoes["Receptores"])
+    r_sel = st.multiselect("Receptores", DATABASE_MCA["Receptores"], default=sugestoes["Receptores"])
 
-# --- SEÇÃO 3: GERAÇÃO DO DIAGRAMA ---
-st.header("3. Visualização do MCA")
-
+# --- SEÇÃO: DIAGRAMA ---
 if st.button("Gerar Diagrama Interativo"):
-    if not fontes_sel or not vias_sel or not receptores_sel:
-        st.warning("Por favor, selecione ao menos um item em cada categoria para ligar os nós.")
+    if f_sel and v_sel and r_sel:
+        net = Network(height="500px", width="100%", directed=True, bgcolor="#ffffff")
+        
+        # Adicionar nós com cores específicas
+        for f in f_sel: net.add_node(f, color="#E63946", shape="dot", size=25)
+        for v in v_sel: net.add_node(v, color="#457B9D", shape="box")
+        for r in r_sel: net.add_node(r, color="#2A9D8F", shape="diamond")
+
+        # Criar as ligações (Arestas)
+        for f in f_sel:
+            for v in v_sel: net.add_edge(f, v)
+        for v in v_sel:
+            for r in r_sel: net.add_edge(v, r)
+
+        # Renderização para Streamlit
+        net.save_graph("temp_mca.html")
+        with open("temp_mca.html", 'r', encoding='utf-8') as f:
+            components.html(f.read(), height=550)
     else:
-        # Inicializa rede do Pyvis
-        net = Network(height="600px", width="100%", bgcolor="#ffffff", font_color="black", directed=True)
-        
-        # Configuração visual dos nós
-        for f in fontes_sel:
-            net.add_node(f, label=f, color="#FF4B4B", title="Fonte de Contaminação", shape="ellipse")
-        for v in vias_sel:
-            net.add_node(v, label=v, color="#1C83E1", title="Via de Exposição", shape="box")
-        for r in receptores_sel:
-            net.add_node(r, label=r, color="#09AB3B", title="Receptor", shape="database")
-
-        # Criação das Arestas (Edges) - Ligação em cascata
-        for f in fontes_sel:
-            for v in vias_sel:
-                net.add_edge(f, v)
-        
-        for v in vias_sel:
-            for r in receptores_sel:
-                net.add_edge(v, r)
-
-        # Salvar e renderizar
-        try:
-            net.save_graph("mca_temp.html")
-            with open("mca_temp.html", 'r', encoding='utf-8') as f:
-                html_data = f.read()
-            components.html(html_data, height=650)
-            st.success("Diagrama gerado com sucesso! Você pode interagir com os nós acima.")
-        except Exception as e:
-            st.error(f"Erro ao gerar visualização: {e}")
-
-st.sidebar.info("Este aplicativo utiliza spaCy para Processamento de Linguagem Natural e Pyvis para grafos dinâmicos.")
-```
-
----
-
-### Como subir para o GitHub e Streamlit:
-1.  **GitHub:** Crie um novo repositório e faça o upload desses dois arquivos (`app.py` e `requirements.txt`).
-2.  **Streamlit.io:** * Acesse [share.streamlit.io](https://share.streamlit.io).
-    * Conecte sua conta do GitHub.
-    * Selecione o repositório e o arquivo `app.py`.
-    * Clique em **Deploy**.
-
-**Nota sobre o spaCy:** O link no `requirements.txt` garante que o modelo de linguagem grande (lg) em português seja baixado automaticamente pelo servidor do Streamlit, permitindo que a extração de entidades funcione sem você precisar instalar nada manualmente no servidor.
-
-Esta estrutura substitui a lógica que você usava no "Cicam - CSM Builder A2" (que era local) por uma solução em nuvem acessível por qualquer navegador.
+        st.error("Selecione ao menos um item em cada categoria.")
