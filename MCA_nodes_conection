@@ -1,16 +1,118 @@
 {
+  "versao": "2.0",
+  "descricao": "Ontologia Lógica para Gerador de Modelo Conceitual de Área (MCA)",
   "regras_de_conexao": {
     "Fonte Primária": {
-      "mecanismos": ["Vazamento", "Infiltração"],
-      "conecta_com": ["Solo", "Ar do Solo"]
+      "categoria": "Origem",
+      "mecanismos": [
+        "Vazamento",
+        "Derramamento",
+        "Descarga",
+        "Infiltração"
+      ],
+      "conecta_with": [
+        "Solo Subsuperficial",
+        "Subsolo",
+        "Solo (Fonte Secundária)"
+      ]
     },
-    "Solo": {
-      "mecanismos": ["Lixiviação", "Volatilização", "Escoamento"],
-      "conecta_com": ["Água Subterrânea", "Ar", "Sedimentos"]
+    "Fonte Secundária (Fase Livre/NAPL)": {
+      "categoria": "Fonte Secundária",
+      "mecanismos": [
+        "Volatilização",
+        "Infiltração profunda"
+      ],
+      "conecta_with": [
+        "Ar do Solo",
+        "Ar Atmosférico",
+        "Água Subterrânea"
+      ]
     },
-    "Meio Físico": {
-      "mecanismos": ["Ingestão", "Inalação", "Contato Dérmico"],
-      "conecta_com": ["Receptor Humano", "Receptor Ecológico"]
+    "Solo (Fonte Secundária)": {
+      "categoria": "Meio / Fonte",
+      "mecanismos": [
+        "Lixiviação",
+        "Percolação",
+        "Volatilização",
+        "Escoamento Superficial (Runoff)",
+        "Erosão",
+        "Emissão e Dispersão Atmosférica"
+      ],
+      "conecta_with": [
+        "Água Subterrânea",
+        "Ar do Solo",
+        "Ar Atmosférico",
+        "Águas Superficiais",
+        "Sedimentos"
+      ]
+    },
+    "Água Subterrânea": {
+      "categoria": "Meio de Transporte",
+      "mecanismos": [
+        "Advecção e Dispersão",
+        "Difusão",
+        "Descarga"
+      ],
+      "conecta_with": [
+        "Águas Superficiais",
+        "Meios de Baixa Permeabilidade",
+        "Ponto de Exposição (PDE)"
+      ]
+    },
+    "Ar do Solo": {
+      "categoria": "Meio de Transporte",
+      "mecanismos": [
+        "Intrusão de Vapores"
+      ],
+      "conecta_with": [
+        "Ar Interior (Indoor)"
+      ]
+    },
+    "Águas Superficiais e Sedimentos": {
+      "categoria": "Meio / Ponto de Exposição",
+      "mecanismos": [
+        "Bioacumulação",
+        "Biomagnificação",
+        "Ingestão incidental",
+        "Contato Direto"
+      ],
+      "conecta_with": [
+        "Biota",
+        "Cadeia Alimentar",
+        "Receptor Humano",
+        "Receptor Ecológico"
+      ]
+    },
+    "Biota e Alimentos": {
+      "categoria": "Cadeia Trófica",
+      "mecanismos": [
+        "Bioacumulação",
+        "Biomagnificação",
+        "Ingestão"
+      ],
+      "conecta_with": [
+        "Receptor Humano",
+        "Receptor Ecológico"
+      ]
+    },
+    "Meio Físico (Ponto de Exposição)": {
+      "categoria": "Ponto Final de Exposição",
+      "mecanismos": [
+        "Ingestão",
+        "Inalação",
+        "Contato Dérmico",
+        "Absorção Radicular / Foliar",
+        "Transferência via Guelras (Ventilação)"
+      ],
+      "conecta_with": [
+        "Receptor Humano",
+        "Receptor Ecológico"
+      ]
     }
+  },
+  "validacao_de_risco": {
+    "status_via_completa": "Confirmada/Risco Real",
+    "status_via_incompleta": "Potencial/Incompleta",
+    "condicao_sucesso": "Caminho ininterrupto de 'Fonte Primária' até 'Receptor'"
   }
 }
