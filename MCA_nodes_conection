@@ -1,0 +1,16 @@
+{
+  "regras_de_conexao": {
+    "Fonte Primária": {
+      "mecanismos": ["Vazamento", "Infiltração"],
+      "conecta_com": ["Solo", "Ar do Solo"]
+    },
+    "Solo": {
+      "mecanismos": ["Lixiviação", "Volatilização", "Escoamento"],
+      "conecta_com": ["Água Subterrânea", "Ar", "Sedimentos"]
+    },
+    "Meio Físico": {
+      "mecanismos": ["Ingestão", "Inalação", "Contato Dérmico"],
+      "conecta_com": ["Receptor Humano", "Receptor Ecológico"]
+    }
+  }
+}
