@@ -1,0 +1,58 @@
+{
+  "versao": "2.1",
+  "descricao": "Ontologia Lógica para Gerador de Modelo Conceitual de Área (MCA)",
+  "regras_de_conexao": {
+    "Fonte Primária": {
+      "categoria": "Origem",
+      "mecanismos": ["Vazamento", "Derramamento", "Descarga", "Infiltração", "Emissão Atmosférica"],
+      "conecta_with": ["Solo (Fonte Secundária)", "Ar Atmosférico", "Subsolo"]
+    },
+    "Fonte Secundária (Fase Livre/NAPL)": {
+      "categoria": "Fonte Secundária",
+      "mecanismos": ["Volatilização", "Infiltração profunda", "Dissolução"],
+      "conecta_with": ["Ar do Solo", "Ar Atmosférico", "Água Subterrânea"]
+    },
+    "Solo (Fonte Secundária)": {
+      "categoria": "Meio / Fonte",
+      "mecanismos": ["Lixiviação", "Percolação", "Volatilização", "Escoamento Superficial (Runoff)", "Erosão", "Emissão e Dispersão Atmosférica", "Absorção Radicular / Bioacumulação"],
+      "conecta_with": ["Água Subterrânea", "Ar do Solo", "Ar Atmosférico", "Águas Superficiais e Sedimentos", "Biota e Alimentos"]
+    },
+    "Água Subterrânea": {
+      "categoria": "Meio de Transporte",
+      "mecanismos": ["Advecção e Dispersão", "Difusão", "Descarga", "Volatilização"],
+      "conecta_with": ["Águas Superficiais e Sedimentos", "Ar do Solo", "Meio Físico (Ponto de Exposição)"]
+    },
+    "Ar do Solo": {
+      "categoria": "Meio de Transporte",
+      "mecanismos": ["Intrusão de Vapores", "Emanação a céu aberto"],
+      "conecta_with": ["Ar Interior (Indoor)", "Ar Atmosférico"]
+    },
+    "Ar Atmosférico": {
+      "categoria": "Meio / Ponto de Exposição",
+      "mecanismos": ["Inalação", "Deposição úmida/seca"],
+      "conecta_with": ["Receptor Humano", "Receptor Ecológico", "Solo (Fonte Secundária)", "Águas Superficiais e Sedimentos"]
+    },
+    "Ar Interior (Indoor)": {
+      "categoria": "Ponto Final de Exposição",
+      "mecanismos": ["Inalação"],
+      "conecta_with": ["Receptor Humano"]
+    },
+    "Águas Superficiais e Sedimentos": {
+      "categoria": "Meio / Ponto de Exposição",
+      "mecanismos": ["Bioacumulação", "Biomagnificação", "Ingestão incidental", "Contato Direto"],
+      "conecta_with": ["Biota e Alimentos", "Receptor Humano", "Receptor Ecológico"]
+    },
+    "Biota e Alimentos": {
+      "categoria": "Cadeia Trófica",
+      "mecanismos": ["Bioacumulação", "Biomagnificação", "Ingestão"],
+      "conecta_with": ["Receptor Humano", "Receptor Ecológico"]
+    },
+    "Meio Físico (Ponto de Exposição)": {
+      "categoria": "Ponto Final de Exposição",
+      "mecanismos": ["Ingestão", "Inalação", "Contato Dérmico", "Transferência via Guelras"],
+      "conecta_with": ["Receptor Humano", "Receptor Ecológico"]
+    },
+    "Receptor Humano": { "categoria": "Alvo", "mecanismos": [], "conecta_with": [] },
+    "Receptor Ecológico": { "categoria": "Alvo", "mecanismos": [], "conecta_with": [] }
+  }
+}
