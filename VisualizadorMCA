@@ -1,0 +1,63 @@
+import React, { useCallback } from 'react';
+import ReactFlow, { 
+  addEdge, 
+  Background, 
+  Controls, 
+  MiniMap,
+  useNodesState,
+  useEdgesState
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+
+// Importe seu JSON do GitHub ou defina uma constante local para teste
+const ontology = {
+  "regras_de_conexao": {
+    "Fonte Primária": { "categoria": "Origem", "conecta_with": ["Solo Subsuperficial", "Ar Atmosférico"] },
+    // ... restante do seu JSON
+  }
+};
+
+const initialNodes = [
+  { id: '1', type: 'input', data: { label: 'Tanque (Fonte Primária)' }, position: { x: 250, y: 5 }, style: { background: '#ffcccc' } },
+  { id: '2', data: { label: 'Solo Subsuperficial' }, position: { x: 250, y: 100 } },
+  { id: '3', type: 'output', data: { label: 'Residente (Receptor)' }, position: { x: 250, y: 200 }, style: { background: '#ccffcc' } },
+];
+
+const initialEdges = [
+  { id: 'e1-2', source: '1', target: '2', label: 'Vazamento', animated: true },
+];
+
+const VisualizadorMCA = () => {
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  // Lógica para validar se a conexão é permitida conforme seu JSON
+  const onConnect = useCallback((params) => {
+    const sourceNode = nodes.find((n) => n.id === params.source);
+    const targetNode = nodes.find((n) => n.id === params.target);
+
+    // Exemplo de validação simples baseada no label (você usará tipos/categorias)
+    console.log(`Tentando conectar ${sourceNode.data.label} a ${targetNode.data.label}`);
+    
+    setEdges((eds) => addEdge({ ...params, animated: true }, eds));
+  }, [nodes, setEdges]);
+
+  return (
+    <div style={{ width: '100vw', height: '100vh' }}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        fitView
+      >
+        <Background color="#aaa" gap={16} />
+        <Controls />
+        <MiniMap />
+      </ReactFlow>
+    </div>
+  );
+};
+
+export default VisualizadorMCA;
